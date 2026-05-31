@@ -1,10 +1,10 @@
 import importlib.util
-import random
 from pathlib import Path
 
 from fastapi import UploadFile
 
 from app.core.config import settings
+from app.services.camera import camera_state
 from app.services.simulator import detection_batch
 
 
@@ -14,12 +14,11 @@ class AIDroneService:
         self.opencv_available = importlib.util.find_spec("cv2") is not None
 
     async def analyze_frame(self) -> dict:
+        camera = await camera_state.snapshot()
         return {
-            "engine": "YOLOv8 + OpenCV" if self.yolo_available and self.opencv_available else "Симулятор AI-детекции",
-            "fps": random.randint(48, 61),
-            "latency_ms": random.randint(18, 42),
-            "resolution": "1920x1080",
-            "detections": detection_batch(),
+            "engine": "YOLOv8 + OpenCV" if self.yolo_available and self.opencv_available else "AI детекция недоступна",
+            "video": camera["video"],
+            "detections": detection_batch() if camera["video"]["online"] else [],
         }
 
     async def save_and_search_photo(self, file: UploadFile) -> dict:
