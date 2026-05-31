@@ -46,8 +46,9 @@ async def build_live_update(tick: int) -> dict:
     camera = await camera_state.snapshot()
     return {
         "type": "live_update",
+        "camera_status": camera["camera_status"],
         "video": camera["video"],
         "telemetry": latest_telemetry(tick),
-        "detections": detection_batch(),
+        "detections": detection_batch() if camera["video"]["online"] else [],
         "route": [latest_telemetry(point) for point in range(max(1, tick - 8), tick + 1)],
     }

@@ -127,7 +127,7 @@ export default function App() {
     };
 
     socket.onclose = () => {
-      setData((previous) => ({ ...previous, video: { ...previous.video, online: false, frame: null, fps: 0, resolution: 'offline' } }));
+      setData((previous) => ({ ...previous, video: { ...previous.video, online: false, status: 'CAMERA_OFFLINE', frame: null, fps: 0, resolution: 'offline' } }));
     };
 
     return () => socket.close();

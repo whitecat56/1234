@@ -2,7 +2,9 @@ import asyncio
 from datetime import UTC, datetime, timedelta
 from typing import Any
 
-CAMERA_OFFLINE_AFTER_SECONDS = 3
+CAMERA_OFFLINE_AFTER_SECONDS = 5
+CAMERA_ONLINE = "CAMERA_ONLINE"
+CAMERA_OFFLINE = "CAMERA_OFFLINE"
 
 
 class LocalCameraState:
@@ -20,8 +22,10 @@ class LocalCameraState:
 
         frame_payload = {
             "type": "camera_frame",
+            "camera_status": CAMERA_ONLINE,
             "video": {
                 "online": True,
+                "status": CAMERA_ONLINE,
                 "frame": frame,
                 "width": width,
                 "height": height,
@@ -47,8 +51,10 @@ class LocalCameraState:
 
         return {
             "type": "camera_status",
+            "camera_status": CAMERA_OFFLINE,
             "video": {
                 "online": False,
+                "status": CAMERA_OFFLINE,
                 "frame": None,
                 "width": 0,
                 "height": 0,
