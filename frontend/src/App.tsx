@@ -1,8 +1,8 @@
 import { AnimatePresence, motion } from 'framer-motion';
-import { Activity, BarChart3, Bot, Crosshair, FileText, Gauge, Home, Map, Maximize2, Radar, Route, Search, Settings, Square, Video } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { BarChart3, Bot, Crosshair, FileText, Gauge, Home, Map, Maximize2, Radar, Route, Search, Settings, Square, Video } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { Area, AreaChart, CartesianGrid, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { demoUpdate, type Detection, type LiveUpdate } from './api/live';
+import { emptyLiveUpdate, liveWebSocketUrl, type Detection, type LiveMessage, type LiveUpdate, type Telemetry } from './api/live';
 import { DroneMap } from './components/DroneMap';
 import { MetricCard } from './components/MetricCard';
 
@@ -26,6 +26,8 @@ const logs = [
 ];
 
 function LiveFeed({ data }: { data: LiveUpdate }) {
+  const hasFrame = data.video.online && Boolean(data.video.frame);
+
   return (
     <div className="glass-panel scanline relative h-full overflow-hidden rounded-[2rem] border-cyan-400/30">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,rgba(34,197,94,0.14),transparent_42%),linear-gradient(135deg,rgba(6,182,212,0.08),rgba(0,0,0,0.58))]" />
@@ -36,8 +38,18 @@ function LiveFeed({ data }: { data: LiveUpdate }) {
       <button className="absolute right-6 top-6 z-10 rounded-xl border border-cyan-300/30 bg-cyan-300/10 p-3 text-cyan-200 transition hover:bg-cyan-300/20">
         <Maximize2 size={18} />
       </button>
-      <div className="absolute inset-10 top-20 rounded-[1.5rem] border border-green-400/15 bg-black/35">
-        {data.detections.slice(0, 4).map((item, index) => (
+      <div className="absolute inset-10 top-20 overflow-hidden rounded-[1.5rem] border border-green-400/15 bg-black/35">
+        {hasFrame ? (
+          <img className="h-full w-full object-cover" src={data.video.frame ?? undefined} alt="Local camera live feed" />
+        ) : (
+          <div className="flex h-full items-center justify-center bg-black/60 text-center">
+            <div>
+              <p className="text-3xl font-black tracking-[0.35em] text-red-300">CAMERA OFFLINE</p>
+              <p className="mt-3 text-sm uppercase tracking-[0.25em] text-slate-400">Ожидание Local Camera Mode</p>
+            </div>
+          </div>
+        )}
+        {hasFrame && data.detections.slice(0, 4).map((item, index) => (
           <motion.div
             key={`${item.label}-${index}`}
             className="absolute rounded-xl border-2 border-green-400/80 bg-green-400/10 shadow-[0_0_32px_rgba(34,197,94,0.35)]"
@@ -97,13 +109,28 @@ function AIModule({ detections }: { detections: Detection[] }) {
 
 export default function App() {
   const [active, setActive] = useState('Главная');
-  const [tick, setTick] = useState(1);
-  const data = useMemo(() => demoUpdate(tick), [tick]);
-  const chartData = useMemo(() => Array.from({ length: 24 }, (_, index) => demoUpdate(tick + index).telemetry), [tick]);
+  const [data, setData] = useState<LiveUpdate>(emptyLiveUpdate());
+  const [chartData, setChartData] = useState<Telemetry[]>([emptyLiveUpdate().telemetry]);
 
   useEffect(() => {
-    const timer = window.setInterval(() => setTick((value) => value + 1), 1200);
-    return () => window.clearInterval(timer);
+    const socket = new WebSocket(liveWebSocketUrl());
+
+    socket.onmessage = (event) => {
+      const message = JSON.parse(event.data) as LiveMessage;
+      if (message.type === 'live_update') {
+        setData(message);
+        setChartData((previous) => [...previous.slice(-23), message.telemetry]);
+        return;
+      }
+
+      setData((previous) => ({ ...previous, video: message.video }));
+    };
+
+    socket.onclose = () => {
+      setData((previous) => ({ ...previous, video: { ...previous.video, online: false, frame: null, fps: 0, resolution: 'offline' } }));
+    };
+
+    return () => socket.close();
   }, []);
 
   return (
