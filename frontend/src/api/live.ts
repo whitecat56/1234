@@ -18,8 +18,11 @@ export type Detection = {
   created_at: string;
 };
 
+export type CameraStatus = 'CAMERA_ONLINE' | 'CAMERA_OFFLINE';
+
 export type VideoState = {
   online: boolean;
+  status: CameraStatus;
   frame: string | null;
   fps: number;
   latency_ms: number;
@@ -31,6 +34,7 @@ export type VideoState = {
 
 export type LiveUpdate = {
   type: 'live_update';
+  camera_status: CameraStatus;
   video: VideoState;
   telemetry: Telemetry;
   detections: Detection[];
@@ -39,6 +43,7 @@ export type LiveUpdate = {
 
 export type CameraFrame = {
   type: 'camera_frame' | 'camera_status';
+  camera_status: CameraStatus;
   video: VideoState;
 };
 
@@ -58,7 +63,8 @@ export const emptyTelemetry = (): Telemetry => ({
 
 export const emptyLiveUpdate = (): LiveUpdate => ({
   type: 'live_update',
-  video: { online: false, frame: null, fps: 0, latency_ms: 0, resolution: 'offline', width: 0, height: 0, last_seen: null },
+  camera_status: 'CAMERA_OFFLINE',
+  video: { online: false, status: 'CAMERA_OFFLINE', frame: null, fps: 0, latency_ms: 0, resolution: 'offline', width: 0, height: 0, last_seen: null },
   telemetry: emptyTelemetry(),
   detections: [],
   route: [],
