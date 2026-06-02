@@ -1,19 +1,19 @@
 export type Telemetry = {
-  speed: number;
-  altitude: number;
-  battery: number;
-  signal: number;
-  distance: number;
-  heading: number;
-  lat: number;
-  lng: number;
+  speed: number | null;
+  altitude: number | null;
+  battery: number | null;
+  signal: number | null;
+  distance: number | null;
+  heading: number | null;
+  lat: number | null;
+  lng: number | null;
   created_at: string;
 };
 
 export type Detection = {
   label: string;
   confidence: number;
-  bbox: { x: number; y: number; w: number; h: number };
+  bbox?: { x: number; y: number; w: number; h: number } | null;
   snapshot_url?: string | null;
   created_at: string;
 };
@@ -50,15 +50,15 @@ export type CameraFrame = {
 export type LiveMessage = LiveUpdate | CameraFrame;
 
 export const emptyTelemetry = (): Telemetry => ({
-  speed: 0,
-  altitude: 0,
-  battery: 0,
-  signal: 0,
-  distance: 0,
-  heading: 0,
-  lat: 41.3111,
-  lng: 69.2797,
-  created_at: new Date().toISOString(),
+  speed: null,
+  altitude: null,
+  battery: null,
+  signal: null,
+  distance: null,
+  heading: null,
+  lat: null,
+  lng: null,
+  created_at: '',
 });
 
 export const emptyLiveUpdate = (): LiveUpdate => ({

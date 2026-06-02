@@ -8,6 +8,9 @@ declare module 'react' {
   export const StrictMode: any;
   export function useEffect(effect: () => void | (() => void), deps?: unknown[]): void;
   export function useMemo<T>(factory: () => T, deps?: unknown[]): T;
+  export function useCallback<T extends (...args: any[]) => any>(callback: T, deps?: unknown[]): T;
+  export function useRef<T>(initial: T): { current: T };
+  export function memo<T>(component: T): T;
   export function useState<T>(initial: T): [T, (value: T | ((current: T) => T)) => void];
   const React: any;
   export default React;
@@ -30,6 +33,20 @@ declare module 'framer-motion' {
 
 declare module 'lucide-react' {
   export const Activity: any;
+  export const WifiOff: any;
+  export const Wifi: any;
+  export const Target: any;
+  export const StopCircle: any;
+  export const Shield: any;
+  export const Satellite: any;
+  export const Ruler: any;
+  export const Radio: any;
+  export const MapPin: any;
+  export const Download: any;
+  export const Compass: any;
+  export const Clock: any;
+  export const Camera: any;
+  export const Battery: any;
   export const BarChart3: any;
   export const Bot: any;
   export const Crosshair: any;
@@ -62,6 +79,7 @@ declare module 'react-leaflet' {
   export const Polyline: any;
   export const Popup: any;
   export const TileLayer: any;
+  export const useMap: any;
 }
 
 declare module '*.css';
