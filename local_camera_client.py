@@ -8,10 +8,14 @@ import argparse
 import asyncio
 import base64
 import json
+import logging
 import time
 
 import cv2
 import websockets
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+logger = logging.getLogger("local-camera-client")
 
 
 def encode_frame(frame, jpeg_quality: int) -> str | None:
@@ -27,19 +31,20 @@ async def stream_camera(url: str, camera_index: int, fps: float, jpeg_quality: i
     while True:
         capture = cv2.VideoCapture(camera_index)
         if not capture.isOpened():
-            print(f"CAMERA OFFLINE: cannot open VideoCapture({camera_index}). Retrying in 2 seconds...")
+            logger.error("CAMERA OFFLINE: cannot open VideoCapture(%s). Retrying in 2 seconds...", camera_index)
             capture.release()
             await asyncio.sleep(2)
             continue
 
-        print(f"LOCAL CAMERA MODE: VideoCapture({camera_index}) opened. Connecting to {url}")
+        logger.info("LOCAL CAMERA MODE: VideoCapture(%s) opened. Connecting to %s", camera_index, url)
         try:
-            async with websockets.connect(url, max_size=None) as websocket:
+            async with websockets.connect(url, max_size=None, ping_interval=20, ping_timeout=10, close_timeout=5) as websocket:
+                logger.info("Backend camera WebSocket connected")
                 previous = time.perf_counter()
                 while True:
                     ok, frame = capture.read()
                     if not ok:
-                        print("CAMERA OFFLINE: failed to read frame. Reopening camera...")
+                        logger.error("CAMERA OFFLINE: failed to read frame. Reopening camera...")
                         break
 
                     now = time.perf_counter()
@@ -65,7 +70,7 @@ async def stream_camera(url: str, camera_index: int, fps: float, jpeg_quality: i
                     )
                     await asyncio.sleep(delay)
         except Exception as exc:  # noqa: BLE001 - keep host camera process alive and reconnect.
-            print(f"Backend connection lost: {exc}. Retrying in 2 seconds...")
+            logger.exception("Backend connection lost: %s. Retrying in 2 seconds...", exc)
             await asyncio.sleep(2)
         finally:
             capture.release()

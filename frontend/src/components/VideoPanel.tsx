@@ -1,10 +1,11 @@
 import { Camera, Maximize2, Radio, StopCircle, Video as VideoIcon } from 'lucide-react';
 import { memo, useCallback, useMemo, useRef } from 'react';
-import type { Telemetry, VideoState } from '../api/live';
+import type { Detection, Telemetry, VideoState } from '../api/live';
 
 type VideoPanelProps = {
   video: VideoState;
   telemetry: Telemetry;
+  detections: Detection[];
 };
 
 const formatMetric = (value: number | null, suffix = '', digits = 1) => (typeof value === 'number' && Number.isFinite(value) ? `${value.toFixed(digits)}${suffix}` : '—');
@@ -20,9 +21,11 @@ function HudValue({ label, value }: { label: string; value: string }) {
   );
 }
 
-function VideoPanelComponent({ video, telemetry }: VideoPanelProps) {
+function VideoPanelComponent({ video, telemetry, detections }: VideoPanelProps) {
   const shellRef = useRef<HTMLDivElement | null>(null);
   const hasFrame = video.online && video.status === 'CAMERA_ONLINE' && Boolean(video.frame);
+  const frameWidth = video.width && video.width > 0 ? video.width : 16;
+  const frameHeight = video.height && video.height > 0 ? video.height : 9;
   const resolution = video.resolution || (video.width && video.height ? `${video.width}x${video.height}` : 'unknown');
 
   const cameraStatusClass = hasFrame ? 'status-online' : 'status-offline';
@@ -53,12 +56,31 @@ function VideoPanelComponent({ video, telemetry }: VideoPanelProps) {
           <div className="video-stats" aria-label="Camera stream metadata">
             <span>FPS {hasFrame ? video.fps.toFixed(1) : '—'}</span>
             <span>{hasFrame ? resolution : 'NO STREAM'}</span>
+            <span>{hasFrame ? `${video.latency_ms}ms` : 'NO LATENCY'}</span>
             <span className={cameraStatusClass}>{video.status}</span>
           </div>
         </div>
 
         <div className="video-stage">
-          {hasFrame ? <img className="live-frame" src={video.frame ?? undefined} alt="Local camera live feed" decoding="async" /> : null}
+          {hasFrame ? (
+            <div className="frame-layer" style={{ aspectRatio: `${frameWidth} / ${frameHeight}` }}>
+              <img className="live-frame" src={video.frame ?? undefined} alt="Local camera live feed" decoding="async" />
+              <div className="bbox-layer" aria-label="AI bounding boxes">
+                {detections.map((item, index) => {
+                  if (!item.bbox) return null;
+                  const left = Math.max(0, Math.min(100, (item.bbox.x / frameWidth) * 100));
+                  const top = Math.max(0, Math.min(100, (item.bbox.y / frameHeight) * 100));
+                  const width = Math.max(1, Math.min(100 - left, (item.bbox.w / frameWidth) * 100));
+                  const height = Math.max(1, Math.min(100 - top, (item.bbox.h / frameHeight) * 100));
+                  return (
+                    <div className="bbox" key={`${item.label}-${item.created_at}-${index}`} style={{ left: `${left}%`, top: `${top}%`, width: `${width}%`, height: `${height}%` }}>
+                      <span>{item.label} {Math.round(item.confidence * 100)}%</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : null}
           {!hasFrame ? (
             <div className="offline-overlay" role="status" aria-live="polite">
               <strong>CAMERA OFFLINE</strong>
@@ -87,7 +109,7 @@ function VideoPanelComponent({ video, telemetry }: VideoPanelProps) {
         <button type="button" onClick={downloadScreenshot} disabled={!video.frame}><Camera size={16} /> Screenshot</button>
         <button type="button" disabled title="Recording is not available for the current backend stream"><VideoIcon size={16} /> Start Recording</button>
         <button type="button" disabled title="Recording is not active"><StopCircle size={16} /> Stop Recording</button>
-        <span className="toolbar-status"><Radio size={15} /> {video.online ? 'Camera link active' : 'Camera link offline'}</span>
+        <span className="toolbar-status"><Radio size={15} /> {video.online ? `Camera link active · frame ${video.frame_number ?? '—'}` : 'Camera link offline'}</span>
       </div>
     </section>
   );

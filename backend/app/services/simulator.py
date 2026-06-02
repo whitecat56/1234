@@ -17,7 +17,7 @@ def latest_telemetry(tick: int = 1) -> dict:
         "heading": round((tick * 11) % 360, 1),
         "lat": BASE_LAT + math.sin(tick / 12) * 0.012,
         "lng": BASE_LNG + math.cos(tick / 12) * 0.012,
-        "created_at": datetime.now(UTC),
+        "created_at": datetime.now(UTC).isoformat(),
     }
 
 
@@ -28,7 +28,7 @@ def detection_batch() -> list[dict]:
             "confidence": round(random.uniform(0.72, 0.98), 2),
             "bbox": {"x": random.randint(80, 640), "y": random.randint(40, 320), "w": random.randint(90, 220), "h": random.randint(80, 180)},
             "snapshot_url": None,
-            "created_at": datetime.now(UTC),
+            "created_at": datetime.now(UTC).isoformat(),
         }
         for _ in range(random.randint(2, 5))
     ]

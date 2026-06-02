@@ -9,7 +9,8 @@ from app.db.session import get_db
 from app.models import Mission, PhotoSearch
 from app.schemas.domain import LoginRequest, MissionCreate, MissionRead, PhotoSearchRead, Token
 from app.services.ai_service import ai_service
-from app.services.simulator import BASE_LAT, BASE_LNG, detection_batch, history_points, latest_telemetry
+from app.services.camera import camera_state
+from app.services.simulator import BASE_LAT, BASE_LNG, history_points, latest_telemetry
 
 router = APIRouter(prefix="/api")
 
@@ -44,8 +45,9 @@ def telemetry_history() -> list[dict]:
 
 
 @router.get("/ai/detections", tags=["AI"])
-def detections() -> list[dict]:
-    return detection_batch()
+async def detections() -> list[dict]:
+    camera = await camera_state.snapshot()
+    return camera.get("detections", []) if camera["video"]["online"] else []
 
 
 @router.post("/ai/analyze-frame", tags=["AI"])
