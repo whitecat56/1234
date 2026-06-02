@@ -16,6 +16,7 @@ export type Detection = {
   bbox?: { x: number; y: number; w: number; h: number } | null;
   snapshot_url?: string | null;
   created_at: string;
+  source?: string;
 };
 
 export type CameraStatus = 'CAMERA_ONLINE' | 'CAMERA_OFFLINE';
@@ -30,6 +31,12 @@ export type VideoState = {
   width?: number;
   height?: number;
   last_seen?: string | null;
+  frame_number?: number;
+};
+
+export type AiState = {
+  engine: string;
+  model_status: string;
 };
 
 export type LiveUpdate = {
@@ -39,12 +46,14 @@ export type LiveUpdate = {
   telemetry: Telemetry;
   detections: Detection[];
   route: Telemetry[];
+  ai?: AiState;
 };
 
 export type CameraFrame = {
   type: 'camera_frame' | 'camera_status';
   camera_status: CameraStatus;
   video: VideoState;
+  detections?: Detection[];
 };
 
 export type LiveMessage = LiveUpdate | CameraFrame;
@@ -64,10 +73,11 @@ export const emptyTelemetry = (): Telemetry => ({
 export const emptyLiveUpdate = (): LiveUpdate => ({
   type: 'live_update',
   camera_status: 'CAMERA_OFFLINE',
-  video: { online: false, status: 'CAMERA_OFFLINE', frame: null, fps: 0, latency_ms: 0, resolution: 'offline', width: 0, height: 0, last_seen: null },
+  video: { online: false, status: 'CAMERA_OFFLINE', frame: null, fps: 0, latency_ms: 0, resolution: 'offline', width: 0, height: 0, last_seen: null, frame_number: 0 },
   telemetry: emptyTelemetry(),
   detections: [],
   route: [],
+  ai: { engine: 'unknown', model_status: 'not_loaded' },
 });
 
 export const liveWebSocketUrl = () => {
