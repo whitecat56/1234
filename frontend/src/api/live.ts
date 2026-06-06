@@ -11,9 +11,13 @@ export type Telemetry = {
 };
 
 export type Detection = {
+  id?: string | number;
+  track_id?: string | number;
   label: string;
   confidence: number;
   bbox?: { x: number; y: number; w: number; h: number } | null;
+  distance_meters?: number | null;
+  world_position?: { lat: number; lng: number } | null;
   snapshot_url?: string | null;
   created_at: string;
   source?: string;

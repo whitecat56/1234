@@ -395,3 +395,418 @@ h1, h2, p { margin: 0; }
   .hud-bottom-right { bottom: 42px; left: 0; right: auto; }
   .instrument-cluster, .telemetry-grid { grid-template-columns: 1fr; }
 }
+
+/* Professional GCS refinement pass: prioritize scrollable mission layout and aviation-grade overlays. */
+.gcs-app {
+  height: auto;
+  min-height: 100vh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: clamp(10px, 1.2vw, 18px);
+}
+
+.dashboard-grid {
+  grid-template-columns: minmax(0, 1.35fr) minmax(360px, .65fr);
+  grid-template-rows: minmax(540px, auto) minmax(430px, auto);
+  grid-template-areas:
+    "video ai"
+    "telemetry map";
+  align-items: stretch;
+  height: auto;
+  min-height: calc(100vh - 118px);
+}
+
+.video-panel,
+.ai-panel,
+.telemetry-panel,
+.map-panel {
+  min-height: 0;
+}
+
+.video-stage {
+  min-height: 500px;
+  padding: clamp(10px, 1.4vw, 18px);
+  cursor: crosshair;
+}
+
+.frame-layer {
+  width: 100%;
+  max-width: min(100%, 1280px);
+  max-height: none;
+  aspect-ratio: 16 / 9 !important;
+  border-radius: 10px;
+}
+
+.zoom-layer {
+  overflow: hidden;
+}
+
+.live-frame {
+  object-fit: contain;
+}
+
+.video-stats span {
+  text-transform: uppercase;
+}
+
+.video-stats .status-online {
+  color: var(--accent);
+  background: rgba(0,255,213,.08);
+}
+
+.hud-compass {
+  top: 4px;
+  width: min(560px, 58vw);
+  border-color: rgba(0,255,213,.5);
+  background: linear-gradient(180deg, rgba(0,0,0,.46), rgba(0,0,0,.08));
+}
+
+.hud-compass b {
+  position: absolute;
+  left: 50%;
+  top: 2px;
+  transform: translateX(-50%);
+  padding: 2px 8px;
+  color: #061016;
+  font-size: .74rem;
+  font-weight: 950;
+  background: var(--accent);
+  border-radius: 0 0 6px 6px;
+}
+
+.attitude-horizon {
+  left: 24%;
+  right: 24%;
+  height: 0;
+  background: transparent;
+  border-top: 2px solid var(--accent);
+}
+
+.attitude-horizon::before,
+.attitude-horizon::after {
+  content: "";
+  position: absolute;
+  top: -1px;
+  width: 56px;
+  border-top: 2px solid var(--accent);
+}
+.attitude-horizon::before { right: calc(50% + 34px); }
+.attitude-horizon::after { left: calc(50% + 34px); }
+.attitude-horizon i,
+.attitude-horizon em {
+  position: absolute;
+  left: 50%;
+  width: 84px;
+  height: 24px;
+  transform: translateX(-50%);
+  border-left: 1px solid rgba(0,255,213,.35);
+  border-right: 1px solid rgba(0,255,213,.35);
+}
+.attitude-horizon i { top: -42px; border-top: 1px solid rgba(0,255,213,.35); }
+.attitude-horizon em { bottom: -42px; border-bottom: 1px solid rgba(0,255,213,.35); }
+
+.hud-speed-tape,
+.hud-altitude-tape {
+  position: absolute;
+  top: 50%;
+  width: 56px;
+  height: min(260px, 42%);
+  transform: translateY(-50%);
+  border: 1px solid rgba(0,255,213,.32);
+  background: repeating-linear-gradient(to top, rgba(0,255,213,.12) 0 1px, transparent 1px 22px), rgba(0,0,0,.24);
+}
+.hud-speed-tape { left: 4px; }
+.hud-altitude-tape { right: 4px; }
+.hud-speed-tape span,
+.hud-altitude-tape span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(to top, rgba(0,255,213,.56), rgba(0,255,213,.04));
+}
+.hud-speed-tape strong,
+.hud-altitude-tape strong {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  min-width: 88px;
+  transform: translate(-50%, -50%);
+  padding: 4px 6px;
+  color: #fff;
+  font-size: .68rem;
+  font-weight: 950;
+  text-align: center;
+  background: rgba(0,0,0,.72);
+  border: 1px solid rgba(0,255,213,.38);
+}
+
+.hud-battery,
+.hud-signal {
+  position: absolute;
+  left: 50%;
+  width: min(260px, 34vw);
+  height: 18px;
+  transform: translateX(-50%);
+  border: 1px solid rgba(0,255,213,.28);
+  background: rgba(0,0,0,.42);
+}
+.hud-battery { bottom: 34px; }
+.hud-signal { bottom: 10px; }
+.hud-battery span,
+.hud-signal span {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--danger), var(--warning), var(--accent));
+}
+.hud-signal span { background: linear-gradient(90deg, rgba(255,193,7,.7), var(--accent)); }
+.hud-battery strong,
+.hud-signal strong {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: #fff;
+  font-size: .62rem;
+  font-weight: 950;
+  letter-spacing: .12em;
+}
+
+.bbox-label,
+.bbox-meta {
+  letter-spacing: .08em;
+}
+
+.ai-panel {
+  min-height: 540px;
+}
+
+.detection-list {
+  flex: 1;
+  min-height: 260px;
+}
+
+.telemetry-panel {
+  grid-area: telemetry;
+  display: flex;
+  flex-direction: column;
+}
+
+.instrument-cluster {
+  grid-template-columns: minmax(220px, 1.2fr) minmax(160px, .8fr) repeat(3, minmax(120px, .7fr));
+  flex: 1;
+}
+
+.gauge-card {
+  min-height: 170px;
+}
+
+.artificial-horizon .horizon-ball {
+  height: 150px;
+}
+
+.compass-rose .rose {
+  width: 124px;
+  height: 124px;
+  background: radial-gradient(circle, rgba(0,255,213,.08), rgba(0,0,0,.16));
+}
+.rose i:nth-child(1) { top: 7px; left: 56px; }
+.rose i:nth-child(2) { right: 9px; top: 53px; }
+.rose i:nth-child(3) { bottom: 7px; left: 56px; }
+.rose i:nth-child(4) { left: 9px; top: 53px; }
+
+.map-panel {
+  min-height: 430px;
+}
+
+.map-canvas {
+  min-height: 360px;
+  padding: 0 14px 14px;
+}
+
+.leaflet-shell {
+  min-height: 340px;
+}
+
+.map-legend {
+  position: absolute;
+  z-index: 420;
+  left: 24px;
+  right: 24px;
+  bottom: 24px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  padding: 8px 10px;
+  color: rgba(216,247,255,.82);
+  font-size: .64rem;
+  font-weight: 950;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  border: 1px solid rgba(0,255,213,.18);
+  border-radius: 12px;
+  background: rgba(2,8,14,.72);
+  pointer-events: none;
+}
+.map-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.map-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 999px; background: var(--accent); }
+.map-legend i.target { background: #ffc107; }
+.map-legend i.route { width: 18px; height: 3px; border-radius: 0; background: var(--accent); }
+.map-legend i.danger { background: var(--danger); }
+
+@media (min-width: 1501px) {
+  .map-panel {
+    min-height: 500px;
+  }
+  .map-canvas,
+  .leaflet-shell {
+    min-height: 430px;
+  }
+}
+
+@media (max-width: 1320px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto;
+    grid-template-areas:
+      "video"
+      "map"
+      "telemetry"
+      "ai";
+  }
+  .video-stage { min-height: 420px; }
+  .map-panel { min-height: 520px; }
+  .map-canvas, .leaflet-shell { min-height: 450px; }
+}
+
+@media (max-width: 900px) {
+  .top-command-bar { align-items: flex-start; flex-direction: column; }
+  .instrument-cluster { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .video-stage { min-height: 300px; }
+  .map-panel { min-height: 420px; }
+  .map-canvas, .leaflet-shell { min-height: 350px; }
+}
+
+/* Investor demo product layer: mission console, target intelligence and tactical severity coding. */
+.dashboard-grid {
+  grid-template-columns: minmax(0, 1.45fr) minmax(370px, .62fr);
+  grid-template-rows: minmax(560px, auto) minmax(280px, auto) minmax(430px, auto);
+  grid-template-areas:
+    "video ai"
+    "mission ai"
+    "telemetry map";
+}
+
+.mission-panel {
+  grid-area: mission;
+  display: flex;
+  flex-direction: column;
+  min-height: 280px;
+}
+
+.mission-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 12px 14px 0;
+}
+.mission-status-grid span,
+.mission-list span {
+  padding: 10px;
+  color: var(--muted);
+  font-size: .66rem;
+  font-weight: 950;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  border: 1px solid rgba(0,255,213,.15);
+  border-radius: 12px;
+  background: rgba(0,0,0,.28);
+}
+.mission-status-grid b,
+.mission-list b { color: #fff; }
+
+.mission-actions,
+.mission-export-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px 14px 0;
+}
+.mission-actions button,
+.mission-export-row button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 8px 10px;
+  color: var(--accent);
+  font-size: .68rem;
+  font-weight: 950;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  border: 1px solid rgba(0,255,213,.22);
+  border-radius: 10px;
+  background: rgba(0,255,213,.06);
+  cursor: pointer;
+}
+.mission-actions button:hover:not(:disabled),
+.mission-export-row button:hover { color: #031016; background: var(--accent); }
+.mission-actions button:disabled { cursor: not-allowed; opacity: .38; }
+.mission-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  padding: 12px 14px 14px;
+  overflow: auto;
+}
+
+.target-intel-card {
+  margin: 12px 0 0;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--bbox-color, var(--accent)) 52%, transparent);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(0,0,0,.36), color-mix(in srgb, var(--bbox-color, var(--accent)) 10%, transparent));
+}
+.target-intel-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.target-intel-head strong { color: #fff; font-size: 1.1rem; font-weight: 950; letter-spacing: .12em; }
+.target-intel-head span { padding: 5px 8px; color: #061016; font-size: .66rem; font-weight: 950; border-radius: 8px; background: var(--bbox-color, var(--accent)); }
+.target-intel-card p { margin-top: 6px; color: var(--muted); font-size: .68rem; font-weight: 950; letter-spacing: .1em; }
+.target-intel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin-top: 10px; }
+.target-intel-grid span { color: rgba(216,247,255,.66); font-size: .64rem; font-weight: 900; text-transform: uppercase; }
+.target-intel-grid b { display: block; color: #fff; font-size: .8rem; }
+
+.threat-low { --threat: #2dff7a; }
+.threat-medium { --threat: #ffc107; }
+.threat-high { --threat: #ff8a00; }
+.threat-critical { --threat: #ff3b3b; }
+.detection-card.threat-medium,
+.detection-card.threat-high,
+.detection-card.threat-critical,
+.target-intel-card.threat-medium,
+.target-intel-card.threat-high,
+.target-intel-card.threat-critical {
+  border-color: color-mix(in srgb, var(--threat) 70%, transparent);
+  box-shadow: 0 0 22px color-mix(in srgb, var(--threat) 14%, transparent);
+}
+.detection-card .detection-title > span { color: var(--threat, var(--accent)); }
+
+.yolo-box.locked,
+.yolo-box[style*="--bbox-color"] { backdrop-filter: contrast(1.05); }
+
+@media (max-width: 1320px) {
+  .dashboard-grid {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto auto auto auto;
+    grid-template-areas:
+      "video"
+      "ai"
+      "mission"
+      "map"
+      "telemetry";
+  }
+}
+
+@media (max-width: 760px) {
+  .mission-status-grid,
+  .mission-list,
+  .target-intel-grid { grid-template-columns: 1fr; }
+}

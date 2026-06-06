@@ -12,6 +12,7 @@ declare module 'react' {
   export function useRef<T>(initial: T): { current: T };
   export function memo<T>(component: T): T;
   export function useState<T>(initial: T): [T, (value: T | ((current: T) => T)) => void];
+  export type WheelEvent<T = Element> = any;
   const React: any;
   export default React;
 }
@@ -80,6 +81,7 @@ declare module 'react-leaflet' {
   export const Popup: any;
   export const TileLayer: any;
   export const useMap: any;
+  export const useMapEvents: any;
 }
 
 declare module '*.css';
