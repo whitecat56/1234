@@ -1,13 +1,49 @@
 import { Radio, Shield, Wifi, WifiOff } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { emptyLiveUpdate, liveWebSocketUrl, type LiveMessage, type LiveUpdate } from './api/live';
+import { emptyLiveUpdate, liveWebSocketUrl, type Detection, type LiveMessage, type LiveUpdate } from './api/live';
 import './App.css';
 import { AiDetectionPanel } from './components/AiDetectionPanel';
 import { DroneMap } from './components/DroneMap';
 import { TelemetryPanel } from './components/TelemetryPanel';
-import { VideoPanel } from './components/VideoPanel';
+import { VideoPanel, type TrackedDetection } from './components/VideoPanel';
 
 type SocketState = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'RECONNECTING';
+
+
+const CLASS_COLORS: Record<string, string> = {
+  'человек': '#2dff7a',
+  person: '#2dff7a',
+  'автомобиль': '#2bdfff',
+  car: '#2bdfff',
+  'грузовик': '#ffc107',
+  truck: '#ffc107',
+  'мотоцикл': '#ff8a00',
+  motorcycle: '#ff8a00',
+  'дрон': '#b86cff',
+  drone: '#b86cff',
+};
+
+const normalizeLabel = (label: string) => label.trim().toLowerCase();
+
+const buildTrackedDetections = (detections: Detection[], telemetryDistance: number | null): TrackedDetection[] => {
+  const now = Date.now();
+  return detections.map((item, index) => {
+    const labelKey = normalizeLabel(item.label || 'unknown');
+    const trackId = `T-${String(index + 1).padStart(3, '0')}`;
+    const created = item.created_at ? new Date(item.created_at).getTime() : now;
+    const ageSeconds = Number.isFinite(created) ? Math.max(0, Math.round((now - created) / 1000)) : null;
+    return {
+      ...item,
+      uid: `${trackId}-${item.created_at || index}`,
+      trackId,
+      displayLabel: item.label || 'unknown',
+      color: CLASS_COLORS[labelKey] ?? '#00ffd5',
+      distanceMeters: typeof telemetryDistance === 'number' ? Math.max(25, Math.round(telemetryDistance * 1000 + index * 37)) : Math.round(90 + index * 42),
+      ageSeconds,
+      isLocked: index === 0 && item.confidence >= 0.65,
+    };
+  });
+};
 
 const normalizeLiveUpdate = (message: LiveMessage, previous: LiveUpdate): LiveUpdate => {
   if (message.type === 'live_update') {
@@ -31,6 +67,7 @@ export default function App() {
   const [data, setData] = useState<LiveUpdate>(emptyLiveUpdate());
   const [socketState, setSocketState] = useState<SocketState>('CONNECTING');
   const [socketError, setSocketError] = useState<string>('');
+  const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
   const reconnectAttemptRef = useRef(0);
   const reconnectTimerRef = useRef<number | null>(null);
 
@@ -117,6 +154,10 @@ export default function App() {
     };
   }, []);
 
+  const trackedDetections = useMemo(() => buildTrackedDetections(data.detections, data.telemetry.distance), [data.detections, data.telemetry.distance]);
+
+  const selectedDetection = trackedDetections.find((item) => item.uid === selectedDetectionId);
+
   const linkLabel = useMemo(() => {
     if (socketState === 'CONNECTED') return 'BACKEND LINK CONNECTED';
     if (socketState === 'CONNECTING') return 'CONNECTING TO BACKEND';
@@ -144,10 +185,10 @@ export default function App() {
       </header>
 
       <div className="dashboard-grid">
-        <VideoPanel video={data.video} telemetry={data.telemetry} detections={data.detections} />
-        <AiDetectionPanel detections={data.detections} />
+        <VideoPanel video={data.video} telemetry={data.telemetry} detections={trackedDetections} selectedDetectionId={selectedDetectionId} onSelectDetection={setSelectedDetectionId} aiStatus={data.ai?.model_status} />
+        <AiDetectionPanel detections={trackedDetections} selectedDetectionId={selectedDetectionId} onSelectDetection={setSelectedDetectionId} />
         <TelemetryPanel telemetry={data.telemetry} />
-        <DroneMap telemetry={data.telemetry} route={data.route} />
+        <DroneMap telemetry={data.telemetry} route={data.route} detections={trackedDetections} selectedDetectionId={selectedDetectionId} onSelectDetection={setSelectedDetectionId} />
       </div>
     </main>
   );
