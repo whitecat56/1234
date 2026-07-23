@@ -1,400 +1,104 @@
-import { Radio, Shield, Wifi, WifiOff } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { emptyLiveUpdate, liveWebSocketUrl, type Detection, type LiveMessage, type LiveUpdate, type Telemetry } from './api/live';
-import './App.css';
-import { AiDetectionPanel } from './components/AiDetectionPanel';
-import { DroneMap } from './components/DroneMap';
-import { MissionControlPanel } from './components/MissionControlPanel';
-import { TelemetryPanel } from './components/TelemetryPanel';
-import { VideoPanel, type TrackedDetection } from './components/VideoPanel';
-import { createMission, geoFenceAroundTelemetry, missionPointFromDetection, missionPointFromTelemetry, type MissionState } from './mission';
+import axios from 'axios';
+import { Chart as ChartJS, CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Filler, Tooltip, Legend } from 'chart.js';
+import { Bar, Doughnut, Line } from 'react-chartjs-2';
+import { useEffect, useMemo, useState } from 'react';
+import { useForm } from 'react-hook-form';
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { AlertTriangle, Archive, BadgeDollarSign, BarChart3, Box, CalendarDays, CheckCircle2, ChevronLeft, ChevronRight, Clock3, Download, Eye, EyeOff, FileSpreadsheet, History, LayoutDashboard, LockKeyhole, LogOut, Menu, PackagePlus, Plus, ReceiptText, RotateCcw, Search, Settings, ShieldCheck, ShoppingCart, Sparkles, Trash2, Upload, UserPlus, Users, WalletCards, X, Zap } from 'lucide-react';
 
-type SocketState = 'CONNECTING' | 'CONNECTED' | 'DISCONNECTED' | 'ERROR' | 'RECONNECTING';
-type TrackPoint = { x: number; y: number; t: number };
-type GeoPoint = { lat: number; lng: number; t: number };
+ChartJS.register(CategoryScale, LinearScale, BarElement, LineElement, PointElement, ArcElement, Filler, Tooltip, Legend);
 
-type BotSortTrack = {
-  uid: string;
-  trackId: string;
-  label: string;
-  color: string;
-  bbox: NonNullable<Detection['bbox']>;
-  confidence: number;
-  firstSeen: number;
-  lastSeen: number;
-  createdAt: string;
-  velocityX: number;
-  velocityY: number;
-  missFrames: number;
-  hits: number;
-  trajectory: TrackPoint[];
-  geoHistory: GeoPoint[];
-  distanceMeters: number | null;
-  movementHeadingDegrees: number | null;
-  objectSpeedMetersPerSecond: number | null;
-};
+const api = axios.create({ baseURL: 'http://localhost:8000' });
+const chartOptions: any = { responsive: true, maintainAspectRatio: false, animation: { duration: 800 }, plugins: { legend: { labels: { color: '#d6fff1', boxWidth: 10, usePointStyle: true } } }, scales: { x: { ticks: { color: '#8aa39a' }, grid: { color: 'rgba(255,255,255,.04)' } }, y: { ticks: { color: '#8aa39a' }, grid: { color: 'rgba(255,255,255,.06)' } } } };
 
-const CLASS_COLORS: Record<string, string> = {
-  'человек': '#2dff7a',
-  person: '#2dff7a',
-  'автомобиль': '#2bdfff',
-  car: '#2bdfff',
-  'грузовик': '#ffc107',
-  truck: '#ffc107',
-  'мотоцикл': '#ff8a00',
-  motorcycle: '#ff8a00',
-  'дрон': '#b86cff',
-  drone: '#b86cff',
-};
+type User = { id: number; username: string; full_name: string; role: string };
+type Product = { id: number; image: string; barcode?: string; name: string; category: string; purchase_price: number; selling_price: number; quantity: number; description: string; created_at: string; updated_at: string };
+type Sale = { id: number; user: string; total_revenue: number; total_profit: number; created_at: string; items: any[] };
+type Toast = { id: number; type: 'success' | 'error' | 'warning'; text: string };
 
-const normalizeLabel = (label: string) => label.trim().toLowerCase();
-const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-const centerOf = (bbox: NonNullable<Detection['bbox']>) => ({ x: bbox.x + bbox.w / 2, y: bbox.y + bbox.h / 2 });
-const bboxIou = (a?: Detection['bbox'], b?: Detection['bbox']) => {
-  if (!a || !b) return 0;
-  const x1 = Math.max(a.x, b.x);
-  const y1 = Math.max(a.y, b.y);
-  const x2 = Math.min(a.x + a.w, b.x + b.w);
-  const y2 = Math.min(a.y + a.h, b.y + b.h);
-  const intersection = Math.max(0, x2 - x1) * Math.max(0, y2 - y1);
-  const union = a.w * a.h + b.w * b.h - intersection;
-  return union > 0 ? intersection / union : 0;
-};
+const tRole = (role: string) => role === 'administrator' ? 'Boshqaruvchi' : 'Xodim';
+const trAction = (v: string) => ({ 'Added Product': 'Mahsulot qo‘shildi', 'Deleted Product': 'Mahsulot o‘chirildi', 'Edited Product': 'Mahsulot tahrirlandi', Sale: 'Savdo', Login: 'Kirish', Logout: 'Chiqish', 'Employee Action': 'Xodim amali', 'Edited Settings': 'Sozlama tahrirlandi', 'Added Expense': 'Xarajat qo‘shildi', 'Import Excel': 'Exceldan yuklandi' }[v] || v);
+const trEntity = (v: string) => ({ users: 'foydalanuvchilar', products: 'mahsulotlar', sales: 'savdolar', settings: 'sozlamalar', expenses: 'xarajatlar' }[v] || v);
+const trDetails = (v: string) => String(v || '').replace('User logged in', 'Foydalanuvchi kirdi').replace('User logged out', 'Foydalanuvchi chiqdi').replace('Created employee', 'Xodim yaratildi').replace('Updated employee', 'Xodim yangilandi').replace('Deleted employee', 'Xodim o‘chirildi').replace('Updated settings', 'Sozlamalar yangilandi').replace('Imported', 'Yuklandi').replace('products', 'mahsulot');
+const money = (n: any) => Number(n || 0).toLocaleString('uz-UZ', { maximumFractionDigits: 2 });
+const shortDate = (v: string) => new Date(v).toLocaleString('uz-UZ');
+const uzError = (value: any) => ({ 'Wrong credentials': 'Foydalanuvchi nomi yoki parol noto‘g‘ri', 'Administrator only': 'Bu amal faqat administrator uchun', 'Product not found': 'Mahsulot topilmadi', 'Username exists': 'Bu login band', 'Cannot delete': 'O‘chirish mumkin emas' }[value] || String(value || 'Xatolik yuz berdi'));
 
-const movementHeading = (from: TrackPoint, to: TrackPoint) => {
-  const angle = (Math.atan2(to.x - from.x, from.y - to.y) * 180) / Math.PI;
-  return (angle + 360) % 360;
-};
-
-const targetGeoPoint = (telemetry: Telemetry, detection: Detection, trackIndex: number, now: number): GeoPoint | null => {
-  if (typeof detection.world_position?.lat === 'number' && typeof detection.world_position?.lng === 'number') return { lat: detection.world_position.lat, lng: detection.world_position.lng, t: now };
-  if (typeof telemetry.lat !== 'number' || typeof telemetry.lng !== 'number' || typeof detection.distance_meters !== 'number') return null;
-  const bearing = ((telemetry.heading ?? 0) + trackIndex * 16) * (Math.PI / 180);
-  return {
-    lat: telemetry.lat + Math.cos(bearing) * detection.distance_meters * 0.000009,
-    lng: telemetry.lng + Math.sin(bearing) * detection.distance_meters * 0.000012,
-    t: now,
-  };
-};
-
-const threatLevel = (distanceMeters: number | null, speedMetersPerSecond: number | null, headingDegrees: number | null, droneHeading: number | null): TrackedDetection['threatLevel'] => {
-  let score = 0;
-  if (distanceMeters !== null) score += distanceMeters < 45 ? 55 : distanceMeters < 90 ? 38 : distanceMeters < 180 ? 22 : 8;
-  if (speedMetersPerSecond !== null) score += speedMetersPerSecond > 18 ? 32 : speedMetersPerSecond > 9 ? 22 : speedMetersPerSecond > 3 ? 10 : 0;
-  if (headingDegrees !== null && droneHeading !== null) {
-    const delta = Math.abs((((headingDegrees - droneHeading + 540) % 360) - 180));
-    score += delta > 135 ? 16 : delta > 95 ? 10 : 0;
-  }
-  if (score >= 82) return 'CRITICAL';
-  if (score >= 58) return 'HIGH';
-  if (score >= 32) return 'MEDIUM';
-  return 'LOW';
-};
-
-const matchScore = (track: BotSortTrack, detection: Detection, now: number) => {
-  if (!detection.bbox || normalizeLabel(track.label) !== normalizeLabel(detection.label || 'unknown')) return -Infinity;
-  const dt = Math.min(1.5, Math.max(0.05, (now - track.lastSeen) / 1000));
-  const predicted = { x: centerOf(track.bbox).x + track.velocityX * dt, y: centerOf(track.bbox).y + track.velocityY * dt };
-  const actual = centerOf(detection.bbox);
-  const diagonal = Math.hypot(Math.max(track.bbox.w, detection.bbox.w), Math.max(track.bbox.h, detection.bbox.h));
-  const distanceScore = 1 - clamp(Math.hypot(predicted.x - actual.x, predicted.y - actual.y) / Math.max(80, diagonal * 2.4), 0, 1);
-  return bboxIou(track.bbox, detection.bbox) * 0.62 + distanceScore * 0.3 + detection.confidence * 0.08;
-};
-
-const updateTrack = (track: BotSortTrack, detection: Detection, telemetry: Telemetry, now: number, trackIndex: number): BotSortTrack => {
-  const bbox = detection.bbox as NonNullable<Detection['bbox']>;
-  const previousCenter = centerOf(track.bbox);
-  const nextCenter = centerOf(bbox);
-  const dt = Math.max(0.08, (now - track.lastSeen) / 1000);
-  const rawVelocityX = (nextCenter.x - previousCenter.x) / dt;
-  const rawVelocityY = (nextCenter.y - previousCenter.y) / dt;
-  const nextTrajectory = [...track.trajectory, { ...nextCenter, t: now }].slice(-48);
-  const speedPx = Math.hypot(rawVelocityX, rawVelocityY);
-  const estimatedMetersPerSecond = typeof detection.distance_meters === 'number'
-    ? clamp((speedPx / Math.max(20, Math.max(bbox.w, bbox.h))) * (detection.distance_meters / 30), 0, 42)
-    : track.objectSpeedMetersPerSecond;
-  const heading = nextTrajectory.length > 1 ? movementHeading(nextTrajectory[nextTrajectory.length - 2], nextTrajectory[nextTrajectory.length - 1]) : track.movementHeadingDegrees;
-  const geo = targetGeoPoint(telemetry, detection, trackIndex, now);
-  return {
-    ...track,
-    label: detection.label || track.label,
-    bbox,
-    confidence: detection.confidence,
-    lastSeen: now,
-    missFrames: 0,
-    hits: track.hits + 1,
-    velocityX: track.velocityX * 0.45 + rawVelocityX * 0.55,
-    velocityY: track.velocityY * 0.45 + rawVelocityY * 0.55,
-    trajectory: nextTrajectory,
-    geoHistory: geo ? [...track.geoHistory, geo].slice(-48) : track.geoHistory,
-    distanceMeters: typeof detection.distance_meters === 'number' ? Math.round(detection.distance_meters) : track.distanceMeters,
-    movementHeadingDegrees: heading,
-    objectSpeedMetersPerSecond: estimatedMetersPerSecond,
-  };
-};
-
-const createTrack = (detection: Detection, telemetry: Telemetry, now: number, sequence: number, index: number): BotSortTrack => {
-  const bbox = detection.bbox as NonNullable<Detection['bbox']>;
-  const backendTrack = detection.track_id ?? detection.id;
-  const label = detection.label || 'unknown';
-  const color = CLASS_COLORS[normalizeLabel(label)] ?? '#00ffd5';
-  const trackId = backendTrack !== undefined ? `T-${backendTrack}` : `BT-${String(sequence).padStart(3, '0')}`;
-  const geo = targetGeoPoint(telemetry, detection, index, now);
-  return {
-    uid: backendTrack !== undefined ? String(backendTrack) : `botsort-${sequence}`,
-    trackId,
-    label,
-    color,
-    bbox,
-    confidence: detection.confidence,
-    firstSeen: now,
-    lastSeen: now,
-    createdAt: detection.created_at || new Date(now).toISOString(),
-    velocityX: 0,
-    velocityY: 0,
-    missFrames: 0,
-    hits: 1,
-    trajectory: [{ ...centerOf(bbox), t: now }],
-    geoHistory: geo ? [geo] : [],
-    distanceMeters: typeof detection.distance_meters === 'number' ? Math.round(detection.distance_meters) : null,
-    movementHeadingDegrees: null,
-    objectSpeedMetersPerSecond: null,
-  };
-};
-
-const buildTrackedDetections = (detections: Detection[], previousTracks: BotSortTrack[], sequence: number, telemetry: Telemetry): { tracked: TrackedDetection[]; tracks: BotSortTrack[]; sequence: number } => {
-  const now = Date.now();
-  const activeTracks = previousTracks.filter((track) => now - track.lastSeen < 14000);
-  const detectionsWithBoxes = detections.filter((item) => item.bbox);
-  const highConfidence = detectionsWithBoxes.filter((item) => item.confidence >= 0.5);
-  const lowConfidence = detectionsWithBoxes.filter((item) => item.confidence < 0.5 && item.confidence >= 0.12);
-  const usedTracks = new Set<string>();
-  const usedDetections = new Set<Detection>();
-  let nextSequence = sequence;
-  let tracks = [...activeTracks];
-
-  const associate = (pool: Detection[], threshold: number) => {
-    pool.forEach((detection, index) => {
-      const backendTrack = detection.track_id ?? detection.id;
-      let matched = backendTrack !== undefined ? tracks.find((track) => track.uid === String(backendTrack) && !usedTracks.has(track.uid)) : undefined;
-      if (!matched) {
-        matched = tracks
-          .filter((track) => !usedTracks.has(track.uid))
-          .map((track) => ({ track, score: matchScore(track, detection, now) }))
-          .sort((left, right) => right.score - left.score)
-          .find(({ score }) => score >= threshold)?.track;
-      }
-      if (matched) {
-        usedTracks.add(matched.uid);
-        usedDetections.add(detection);
-        tracks = tracks.map((track) => (track.uid === matched?.uid ? updateTrack(track, detection, telemetry, now, index) : track));
-      }
-    });
-  };
-
-  associate(highConfidence, 0.34);
-  associate(lowConfidence, 0.46);
-
-  detectionsWithBoxes.forEach((detection, index) => {
-    if (usedDetections.has(detection)) return;
-    nextSequence += 1;
-    tracks.push(createTrack(detection, telemetry, now, nextSequence, index));
-  });
-
-  tracks = tracks
-    .map((track) => (usedTracks.has(track.uid) || track.lastSeen === now ? track : { ...track, missFrames: track.missFrames + 1, confidence: track.confidence * 0.86 }))
-    .filter((track) => now - track.lastSeen < 14000);
-
-  const tracked = tracks
-    .filter((track) => track.hits >= 1 && (track.missFrames <= 20 || now - track.lastSeen < 10000))
-    .map((track, index) => ({
-      label: track.label,
-      confidence: clamp(track.confidence, 0.05, 1),
-      bbox: track.bbox,
-      created_at: track.createdAt,
-      source: track.missFrames > 0 ? 'botsort_prediction' : 'yolo',
-      uid: track.uid,
-      trackId: track.trackId,
-      color: track.color,
-      displayLabel: track.label,
-      distanceMeters: track.distanceMeters,
-      ageSeconds: Math.max(0, Math.round((now - track.firstSeen) / 1000)),
-      isLocked: index === 0 && track.confidence >= 0.55,
-      firstSeen: new Date(track.firstSeen).toISOString(),
-      lastSeen: new Date(track.lastSeen).toISOString(),
-      trackingSeconds: Math.max(0, Math.round((now - track.firstSeen) / 1000)),
-      objectSpeedMetersPerSecond: track.objectSpeedMetersPerSecond,
-      movementHeadingDegrees: track.movementHeadingDegrees,
-      threatLevel: threatLevel(track.distanceMeters, track.objectSpeedMetersPerSecond, track.movementHeadingDegrees, telemetry.heading),
-      trajectory: track.trajectory,
-      geoHistory: track.geoHistory,
-      isPredicted: track.missFrames > 0,
-    } satisfies TrackedDetection));
-
-  return { tracked, tracks, sequence: nextSequence };
-};
-
-const demoFrame = (time: number) => {
-  const a = (time / 900) % 360;
-  const x = 42 + Math.sin(time / 1100) * 18;
-  const y = 46 + Math.cos(time / 1500) * 11;
-  const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 1280 720'><defs><radialGradient id='g' cx='50%' cy='45%'><stop offset='0' stop-color='#123447'/><stop offset='1' stop-color='#02060a'/></radialGradient><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='2' stitchTiles='stitch'/><feColorMatrix type='saturate' values='.2'/><feComponentTransfer><feFuncA type='table' tableValues='0 .16'/></feComponentTransfer></filter></defs><rect width='1280' height='720' fill='url(#g)'/><rect width='1280' height='720' filter='url(#n)' opacity='.45'/><g stroke='#00ffd5' stroke-opacity='.22' fill='none'><path d='M0 520 C260 430 470 560 760 430 S1110 340 1280 410'/><path d='M0 600 C260 520 520 650 850 520 S1120 480 1280 530'/></g><g transform='translate(${x * 12.8} ${y * 7.2}) rotate(${a})'><path d='M-90 -28 L90 -28 L128 0 L90 28 L-90 28 Z' fill='#101820' stroke='#2bdfff' stroke-width='4'/><circle r='18' fill='#00ffd5'/></g><g fill='#ffc107' opacity='.85'><circle cx='930' cy='250' r='9'/><circle cx='970' cy='270' r='5'/></g><text x='42' y='58' font-family='monospace' font-size='28' fill='#00ffd5'>UZ DRONE AI DEMO EO STREAM</text></svg>`;
-  return `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`;
-};
-
-const createDemoUpdate = (previous: LiveUpdate): LiveUpdate => {
-  const now = Date.now();
-  const seconds = now / 1000;
-  const lat = 41.3111 + Math.sin(seconds / 18) * 0.004;
-  const lng = 69.2797 + Math.cos(seconds / 16) * 0.005;
-  const heading = (seconds * 9) % 360;
-  const detections: Detection[] = [
-    { track_id: 'D-01', label: 'vehicle', confidence: 0.91, bbox: { x: 315 + Math.sin(seconds) * 46, y: 220 + Math.cos(seconds / 1.4) * 18, w: 142, h: 78 }, distance_meters: 118 + Math.sin(seconds / 3) * 22, world_position: { lat: lat + 0.0015, lng: lng + 0.002 }, created_at: new Date(now - 12000).toISOString(), source: 'demo_yolo' },
-    { track_id: 'P-17', label: 'person', confidence: 0.83, bbox: { x: 810 + Math.cos(seconds / 1.1) * 34, y: 260 + Math.sin(seconds / 1.7) * 24, w: 58, h: 132 }, distance_meters: 64 + Math.cos(seconds / 2) * 12, world_position: { lat: lat - 0.0012, lng: lng + 0.0013 }, created_at: new Date(now - 26000).toISOString(), source: 'demo_yolo' },
-    { track_id: 'UAV-2', label: 'drone', confidence: 0.76, bbox: { x: 610 + Math.sin(seconds / 1.9) * 74, y: 120 + Math.cos(seconds / 2.2) * 30, w: 74, h: 42 }, distance_meters: 210, world_position: { lat: lat + 0.0022, lng: lng - 0.001 }, created_at: new Date(now - 7000).toISOString(), source: 'demo_yolo' },
-  ];
-  const telemetry: Telemetry = { speed: 54 + Math.sin(seconds / 3) * 7, altitude: 128 + Math.cos(seconds / 5) * 12, battery: 82 - ((seconds / 20) % 9), signal: 93, distance: 1.7, heading, lat, lng, created_at: new Date(now).toISOString() };
-  const route = [...previous.route, telemetry].filter((point) => point.lat !== null).slice(-80);
-  return { type: 'live_update', camera_status: 'CAMERA_ONLINE', video: { online: true, status: 'CAMERA_ONLINE', frame: demoFrame(now), fps: 30, latency_ms: 38, resolution: '1280x720 DEMO', width: 1280, height: 720, last_seen: new Date(now).toISOString(), frame_number: Math.round(seconds * 30) }, telemetry, detections, route, ai: { engine: 'demo-yolo', model_status: 'demo_active' } };
-};
-
-const normalizeLiveUpdate = (message: LiveMessage, previous: LiveUpdate): LiveUpdate => {
-  if (message.type === 'live_update') {
-    return { ...message, detections: Array.isArray(message.detections) ? message.detections : [], route: Array.isArray(message.route) ? message.route : [], ai: message.ai ?? previous.ai };
-  }
-  return { ...previous, camera_status: message.camera_status, video: message.video, detections: Array.isArray(message.detections) ? message.detections : previous.detections };
-};
-
-export default function App() {
-  const [data, setData] = useState<LiveUpdate>(emptyLiveUpdate());
-  const [socketState, setSocketState] = useState<SocketState>('CONNECTING');
-  const [socketError, setSocketError] = useState<string>('');
-  const [selectedDetectionId, setSelectedDetectionId] = useState<string | null>(null);
-  const [mission, setMission] = useState<MissionState>(createMission());
-  const reconnectAttemptRef = useRef(0);
-  const reconnectTimerRef = useRef<number | null>(null);
-  const detectionTracksRef = useRef<BotSortTrack[]>([]);
-  const detectionSequenceRef = useRef(0);
-
-  useEffect(() => {
-    let socket: WebSocket | null = null;
-    let disposed = false;
-    const clearReconnectTimer = () => {
-      if (reconnectTimerRef.current !== null) {
-        window.clearTimeout(reconnectTimerRef.current);
-        reconnectTimerRef.current = null;
-      }
-    };
-    const markCameraOffline = () => {
-      setData((previous) => ({ ...previous, camera_status: 'CAMERA_OFFLINE', video: { ...previous.video, online: false, status: 'CAMERA_OFFLINE', frame: null, fps: 0, resolution: 'offline' }, detections: [] }));
-    };
-    const scheduleReconnect = () => {
-      if (disposed) return;
-      const attempt = reconnectAttemptRef.current + 1;
-      reconnectAttemptRef.current = attempt;
-      const delay = Math.min(1000 * 2 ** (attempt - 1), 10000);
-      setSocketState('RECONNECTING');
-      setSocketError(`Повторное подключение через ${Math.round(delay / 1000)}с (попытка ${attempt})`);
-      clearReconnectTimer();
-      reconnectTimerRef.current = window.setTimeout(connect, delay);
-    };
-    const connect = () => {
-      if (disposed) return;
-      clearReconnectTimer();
-      setSocketState(reconnectAttemptRef.current > 0 ? 'RECONNECTING' : 'CONNECTING');
-      const url = liveWebSocketUrl();
-      socket = new WebSocket(url);
-      socket.onopen = () => { reconnectAttemptRef.current = 0; setSocketState('CONNECTED'); setSocketError(''); };
-      socket.onmessage = (event) => {
-        try {
-          const message = JSON.parse(event.data) as LiveMessage;
-          if (message.type !== 'live_update' && message.type !== 'camera_frame' && message.type !== 'camera_status') return;
-          setData((previous) => normalizeLiveUpdate(message, previous));
-        } catch (error) {
-          const details = error instanceof Error ? error.message : 'Unknown JSON parse error';
-          setSocketState('ERROR');
-          setSocketError(`Некорректное сообщение WebSocket: ${details}`);
-          console.error('Live WebSocket message parse failed', error, event.data);
-        }
-      };
-      socket.onerror = (event) => { setSocketState('ERROR'); setSocketError(`Ошибка WebSocket ${url}`); console.error('Live WebSocket error', event); };
-      socket.onclose = (event) => {
-        if (disposed) return;
-        setSocketState('DISCONNECTED');
-        setSocketError(`WebSocket закрыт: code=${event.code}, reason=${event.reason || 'no reason'}`);
-        markCameraOffline();
-        scheduleReconnect();
-      };
-    };
-    connect();
-    return () => { disposed = true; clearReconnectTimer(); socket?.close(1000, 'React component unmounted'); };
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setInterval(() => {
-      setData((previous) => (previous.video.online && previous.ai?.model_status !== 'demo_active' ? previous : createDemoUpdate(previous)));
-    }, 250);
-    return () => window.clearInterval(timer);
-  }, []);
-
-  const trackedDetections = useMemo(() => {
-    const result = buildTrackedDetections(data.detections, detectionTracksRef.current, detectionSequenceRef.current, data.telemetry);
-    detectionTracksRef.current = result.tracks;
-    detectionSequenceRef.current = result.sequence;
-    return result.tracked;
-  }, [data.detections, data.telemetry]);
-
-  const selectedDetection = trackedDetections.find((item) => item.uid === selectedDetectionId);
-  const isDemoMode = data.ai?.model_status === 'demo_active';
-  const linkLabel = useMemo(() => {
-    if (isDemoMode) return 'DEMO MODE ACTIVE';
-    if (socketState === 'CONNECTED') return 'BACKEND LINK CONNECTED';
-    if (socketState === 'CONNECTING') return 'CONNECTING TO BACKEND';
-    if (socketState === 'RECONNECTING') return 'RECONNECTING TO BACKEND';
-    if (socketState === 'ERROR') return 'BACKEND LINK ERROR';
-    return 'BACKEND LINK DISCONNECTED';
-  }, [isDemoMode, socketState]);
-
-  const addWaypoint = () => {
-    const point = missionPointFromTelemetry(data.telemetry, 'waypoint', `WP-${mission.waypoints.length + 1}`);
-    if (point) setMission((current) => ({ ...current, waypoints: [...current.waypoints, point] }));
-  };
-  const addPoi = () => {
-    const point = missionPointFromDetection(selectedDetection, `${selectedDetection?.trackId ?? 'TARGET'} POI`);
-    if (point) setMission((current) => ({ ...current, pois: [...current.pois, point] }));
-  };
-  const addGeoFence = () => {
-    const zone = geoFenceAroundTelemetry(data.telemetry, `RESTRICTED-${mission.geoFences.length + 1}`);
-    if (zone) setMission((current) => ({ ...current, geoFences: [...current.geoFences, zone] }));
-  };
-  const saveMission = () => localStorage.setItem('uz-drone-ai-mission', JSON.stringify(mission));
-  const loadMission = () => {
-    const stored = localStorage.getItem('uz-drone-ai-mission');
-    if (stored) setMission(JSON.parse(stored) as MissionState);
-  };
-
-  return (
-    <main className="gcs-app">
-      <header className="top-command-bar">
-        <div className="brand-block">
-          <div className="brand-mark"><Shield size={22} /></div>
-          <div><h1>UZ DRONE AI</h1><p>TACTICAL GROUND CONTROL STATION</p></div>
-        </div>
-        <div className="system-strip" aria-label="System state">
-          <span className={data.video.online ? 'pill online' : 'pill danger'}>{isDemoMode ? 'DEMO_STREAM' : data.camera_status}</span>
-          <span className={socketState === 'CONNECTED' && !isDemoMode ? 'pill online' : 'pill warning'} title={socketError}>{socketState === 'CONNECTED' && !isDemoMode ? <Wifi size={14} /> : <WifiOff size={14} />} {linkLabel}</span>
-          <span className="pill"><Radio size={14} /> {data.video.resolution || 'NO VIDEO'}</span>
-          <span className="pill" title={data.ai?.model_status}>AI {data.ai?.model_status ?? 'unknown'}</span>
-        </div>
-      </header>
-
-      <div className="dashboard-grid">
-        <VideoPanel video={data.video} telemetry={data.telemetry} detections={trackedDetections} selectedDetectionId={selectedDetectionId} onSelectDetection={setSelectedDetectionId} aiStatus={data.ai?.model_status} />
-        <AiDetectionPanel detections={trackedDetections} selectedDetectionId={selectedDetectionId} onSelectDetection={setSelectedDetectionId} />
-        <MissionControlPanel mission={mission} telemetry={data.telemetry} route={data.route} detections={trackedDetections} selectedDetection={selectedDetection} onCreateMission={() => setMission(createMission())} onAddWaypoint={addWaypoint} onAddPoi={addPoi} onAddGeoFence={addGeoFence} onSaveMission={saveMission} onLoadMission={loadMission} />
-        <TelemetryPanel telemetry={data.telemetry} />
-        <DroneMap telemetry={data.telemetry} route={data.route} detections={trackedDetections} selectedDetectionId={selectedDetectionId} onSelectDetection={setSelectedDetectionId} mission={mission} />
-      </div>
-    </main>
-  );
+function useAuth() {
+  const [user, setUserState] = useState<User | null>(() => JSON.parse(localStorage.user || 'null'));
+  useEffect(() => { const id = api.interceptors.request.use(config => { const token = localStorage.token; if (token) config.headers.Authorization = `Bearer ${token}`; return config; }); return () => api.interceptors.request.eject(id); }, []);
+  return { user, setUser: (next: User | null) => { next ? localStorage.user = JSON.stringify(next) : localStorage.removeItem('user'); setUserState(next); } };
 }
+
+function useToasts() {
+  const [toasts, setToasts] = useState<Toast[]>([]);
+  const push = (type: Toast['type'], text: string) => { const id = Date.now(); setToasts(items => [...items, { id, type, text }]); setTimeout(() => setToasts(items => items.filter(x => x.id !== id)), 3600); };
+  return { push, Toasts: () => <div className="fixed right-4 top-4 z-50 grid gap-3">{toasts.map(t => <div key={t.id} className={`toast ${t.type}`}><CheckCircle2 size={18} /><span>{t.text}</span></div>)}</div> };
+}
+
+function Guard({ user, children }: any) { return user ? children : <Navigate to="/login" />; }
+function LoadingGrid() { return <div className="grid md:grid-cols-4 gap-4">{Array.from({ length: 8 }).map((_, i) => <div className="skeleton h-32" key={i} />)}</div>; }
+function Empty({ text }: any) { return <div className="card p-8 text-center text-white/55"><Sparkles className="mx-auto mb-2 text-cyan" />{text}</div>; }
+
+function Shell({ user, setUser }: { user: User; setUser: (u: User | null) => void }) {
+  const [collapsed, setCollapsed] = useState(false);
+  const { push, Toasts } = useToasts();
+  const location = useLocation();
+  const nav = [
+    ['/', 'Boshqaruv paneli', LayoutDashboard], ['/products', 'Mahsulotlar', Box], ['/sales', 'Savdo', ShoppingCart], ['/history', 'Tarix', History], ['/analytics', 'Analitika', BarChart3], ['/calendar', 'Kalendar', CalendarDays], ['/employees', 'Xodimlar', Users], ['/settings', 'Sozlamalar', Settings]
+  ];
+  return <div className="min-h-screen bg-orbit text-white lg:flex">
+    <Toasts />
+    <aside className={`sidebar ${collapsed ? 'lg:w-24' : 'lg:w-80'}`}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 overflow-hidden"><div className="logo-mark"><Zap size={25} /></div>{!collapsed && <div><h1 className="text-xl font-black tracking-wide">GameClub Aktash</h1><p className="text-xs text-mute">Premium boshqaruv tizimi</p></div>}</div>
+        <button className="icon-btn hidden lg:grid" onClick={() => setCollapsed(!collapsed)}><Menu size={18} /></button>
+      </div>
+      <div className="operator-card"><ShieldCheck className="text-neon" /><div className={collapsed ? 'hidden' : ''}><p className="font-bold">{user.full_name}</p><p className="text-xs text-mute">{tRole(user.role)}</p></div></div>
+      <nav className="mt-6 grid gap-2">{nav.filter(([, title]) => user.role === 'administrator' || title === 'Savdo').map(([to, title, Icon]: any) => <Link key={to} to={to} className={`nav-link ${location.pathname === to ? 'active' : ''}`} title={title}><Icon size={20} /><span className={collapsed ? 'lg:hidden' : ''}>{title}</span></Link>)}</nav>
+      <button className="nav-link mt-auto text-danger" onClick={() => api.post('/api/logout').finally(() => { localStorage.clear(); setUser(null); push('success', 'Tizimdan chiqildi'); })}><LogOut size={20} /><span className={collapsed ? 'lg:hidden' : ''}>Chiqish</span></button>
+    </aside>
+    <main className="flex-1 p-4 md:p-7 lg:p-9"><Routes><Route path="/" element={<Dashboard />} /><Route path="/products" element={<Products admin={user.role === 'administrator'} push={push} />} /><Route path="/sales" element={<Sales push={push} />} /><Route path="/history" element={<HistoryPage />} /><Route path="/analytics" element={<Analytics />} /><Route path="/calendar" element={<Calendar />} /><Route path="/employees" element={<Employees push={push} />} /><Route path="/settings" element={<SettingsPage push={push} />} /></Routes></main>
+  </div>;
+}
+
+function Login({ setUser }: any) {
+  const { register, handleSubmit } = useForm({ defaultValues: { username: 'admin', password: 'admin123', remember: true } });
+  const [err, setErr] = useState(''); const [show, setShow] = useState(false); const [loading, setLoading] = useState(false); const nav = useNavigate();
+  return <div className="login-screen"><div className="login-aura" /><form className="login-card" onSubmit={handleSubmit(async data => { setLoading(true); setErr(''); try { const res = await api.post('/api/login', data); localStorage.token = res.data.access_token; setUser(res.data.user); nav('/'); } catch (e: any) { setErr(uzError(e.response?.data?.detail)); } finally { setLoading(false); } })}>
+    <div className="mx-auto logo-mark large"><Zap size={42} /></div><div className="text-center"><p className="eyebrow">Premium esports boshqaruvi</p><h1 className="text-4xl font-black">GameClub Aktash</h1><p className="text-mute mt-2">Klub savdosi, ombori va analitikasini bitta joyda boshqaring</p></div>
+    <label className="field"><span>Foydalanuvchi nomi</span><input {...register('username', { required: true })} placeholder="Foydalanuvchi nomini kiriting" /></label>
+    <label className="field"><span>Parol</span><div className="relative"><input type={show ? 'text' : 'password'} {...register('password', { required: true })} placeholder="Parolni kiriting" /><button type="button" className="absolute right-3 top-3 text-mute" onClick={() => setShow(!show)}>{show ? <EyeOff /> : <Eye />}</button></div></label>
+    <div className="flex items-center justify-between text-sm text-mute"><label className="flex gap-2"><input type="checkbox" {...register('remember')} /> Eslab qolish</label><span>Xavfsiz lokal kirish</span></div>
+    <button className="btn-primary h-14" disabled={loading}>{loading ? 'Tekshirilmoqda...' : 'Tizimga kirish'}</button>{err && <p className="alert-error"><AlertTriangle size={17} />{err}</p>}<p className="text-center text-xs text-mute">Boshlang‘ich hisob: admin / admin123</p>
+  </form></div>;
+}
+
+function Page({ title, subtitle, children }: any) { return <><header className="page-head"><div><p className="eyebrow">GameClub Aktash</p><h2>{title}</h2>{subtitle && <p className="text-mute mt-1">{subtitle}</p>}</div><GlobalSearch /></header><section className="animate-in">{children}</section></>; }
+function GlobalSearch() { const [q, setQ] = useState(''); const [res, setRes] = useState<any>(); return <div className="global-search"><Search size={19} /><input value={q} onChange={e => { setQ(e.target.value); e.target.value ? api.get('/api/search?q=' + encodeURIComponent(e.target.value)).then(r => setRes(r.data)) : setRes(null); }} placeholder="Umumiy qidiruv..." />{q && res && <div className="search-pop"><b>Qidiruv natijalari</b><span>Mahsulotlar: {res.products.length}</span><span>Savdolar: {res.sales.length}</span><span>Tarix: {res.history.length}</span></div>}</div>; }
+function Stat({ title, value, icon: Icon, tone = 'neon' }: any) { return <div className="stat-card"><div className={`stat-icon ${tone}`}><Icon size={22} /></div><p>{title}</p><b>{value}</b></div>; }
+
+function Dashboard() { const [d, setD] = useState<any>(); useEffect(() => { api.get('/api/dashboard').then(r => setD(r.data)); }, []); if (!d) return <Page title="Boshqaruv paneli"><LoadingGrid /></Page>; const labels = d.daily_chart.map((x: any) => x.date.slice(5)); return <Page title="Boshqaruv paneli" subtitle="Bugungi klub holati, ombor signallari va savdo ritmi">
+  <div className="grid md:grid-cols-2 xl:grid-cols-4 gap-4"><Stat title="Bugungi tushum" value={`${money(d.revenue)} so‘m`} icon={BadgeDollarSign} /><Stat title="Bugungi foyda" value={`${money(d.profit)} so‘m`} icon={WalletCards} tone="cyan" /><Stat title="Bugungi xarajat" value={`${money(d.expenses)} so‘m`} icon={Archive} tone="warn" /><Stat title="Sotilgan mahsulot" value={d.products_sold} icon={ShoppingCart} /></div>
+  <div className="grid xl:grid-cols-3 gap-4 mt-4"><div className="card chart-card xl:col-span-2"><SectionTitle title="Tushum dinamikasi" note="So‘nggi 14 kun" /><Line options={chartOptions} data={{ labels, datasets: [{ label: 'Tushum', data: d.daily_chart.map((x: any) => x.revenue), borderColor: '#00FFB2', backgroundColor: 'rgba(0,255,178,.16)', fill: true, tension: .45 }] }} /></div><div className="grid gap-4"><Stat title="Ombordagi jami qoldiq" value={d.remaining_products} icon={Box} /><Stat title="Eng ommabop mahsulot" value={d.most_popular_product} icon={Sparkles} tone="cyan" /><Stat title="Oylik tushum" value={`${money(d.monthly_revenue)} so‘m`} icon={BarChart3} /></div></div>
+  <div className="grid xl:grid-cols-2 gap-4 mt-4"><Recent sales={d.recent_sales} /><Low products={d.low_stock} /></div></Page>; }
+function SectionTitle({ title, note }: any) { return <div className="flex items-start justify-between mb-4"><div><h3 className="text-lg font-black">{title}</h3>{note && <p className="text-sm text-mute">{note}</p>}</div></div>; }
+function Recent({ sales }: { sales: Sale[] }) { return <div className="card p-5"><SectionTitle title="So‘nggi savdolar" note="Oxirgi operatsiyalar" />{sales.length ? <div className="grid gap-3">{sales.map(s => <div key={s.id} className="activity-row"><ReceiptText className="text-neon" /><div className="flex-1"><b>Chek #{s.id}</b><p>{shortDate(s.created_at)} · {s.user}</p></div><strong>{money(s.total_revenue)} so‘m</strong></div>)}</div> : <Empty text="Hozircha savdo yo‘q" />}</div>; }
+function Low({ products }: { products: Product[] }) { return <div className="card p-5"><SectionTitle title="Kam qolgan mahsulotlar" note="5 dona yoki undan kam" />{products.length ? <div className="grid gap-3">{products.map(p => <div key={p.id} className="activity-row danger"><AlertTriangle /><div className="flex-1"><b>{p.name}</b><p>{p.category}</p></div><span className="badge danger">{p.quantity} dona</span></div>)}</div> : <Empty text="Kam qoldiq yo‘q" />}</div>; }
+
+function Products({ admin, push }: any) { const [items, setItems] = useState<Product[]>([]), [edit, setEdit] = useState<any>(null), [q, setQ] = useState(''); const load = () => api.get('/api/products?search=' + encodeURIComponent(q)).then(r => setItems(r.data)); useEffect(() => { load(); }, [q]); return <Page title="Mahsulotlar" subtitle="Ombor, narxlar va mahsulot kartalarini boshqarish"><div className="toolbar"><div className="search-box"><Search /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Mahsulot, kategoriya yoki shtrix-kod..." /></div>{admin && <button className="btn-primary" onClick={() => setEdit({})}><PackagePlus /> Mahsulot qo‘shish</button>}</div>{edit && <ProductForm data={edit} done={() => { setEdit(null); load(); }} push={push} />}<PremiumTable rows={items} columns={[['image', 'Rasm'], ['name', 'Nomi'], ['category', 'Kategoriya'], ['selling_price', 'Sotish narxi'], ['quantity', 'Qoldiq'], ['description', 'Izoh']]} actions={admin ? (x: Product) => <><button className="btn-ghost" onClick={() => setEdit(x)}>Tahrirlash</button><button className="btn-danger" onClick={() => confirm('Mahsulot o‘chirilsinmi?') && api.delete('/api/products/' + x.id).then(() => { push('success', 'Mahsulot o‘chirildi'); load(); }).catch((e) => push('error', uzError(e.response?.data?.detail)))}><Trash2 size={16} /> O‘chirish</button></> : undefined} /></Page>; }
+function ProductForm({ data, done, push }: any) { const { register, handleSubmit } = useForm({ defaultValues: data }); const fields = [['name', 'Mahsulot nomi'], ['category', 'Kategoriya'], ['barcode', 'Shtrix-kod'], ['image', 'Rasm URL'], ['purchase_price', 'Xarid narxi'], ['selling_price', 'Sotish narxi'], ['quantity', 'Miqdor'], ['description', 'Izoh']]; return <div className="modal-backdrop"><form className="modal-card" onSubmit={handleSubmit((d: any) => api[data.id ? 'put' : 'post']('/api/products' + (data.id ? '/' + data.id : ''), { ...d, purchase_price: +d.purchase_price, selling_price: +d.selling_price, quantity: +d.quantity }).then(() => { push('success', data.id ? 'Mahsulot yangilandi' : 'Mahsulot qo‘shildi'); done(); }).catch((e: any) => push('error', uzError(e.response?.data?.detail))))}><div className="flex justify-between"><div><p className="eyebrow">Ombor kartasi</p><h3 className="text-2xl font-black">{data.id ? 'Mahsulotni tahrirlash' : 'Yangi mahsulot'}</h3></div><button type="button" onClick={done} className="icon-btn"><X /></button></div><div className="grid md:grid-cols-2 gap-3">{fields.map(([name, label]) => <label className="field" key={name}><span>{label}</span><input {...register(name, { required: ['name', 'category'].includes(name) })} /></label>)}</div><div className="flex justify-end gap-3"><button type="button" className="btn-ghost" onClick={done}>Bekor qilish</button><button className="btn-primary">Saqlash</button></div></form></div>; }
+
+function Sales({ push }: any) { const [products, setProducts] = useState<Product[]>([]), [cart, setCart] = useState<any[]>([]); const load = () => api.get('/api/products').then(r => setProducts(r.data)); useEffect(() => { load(); }, []); const total = cart.reduce((sum, c) => sum + (products.find(p => p.id === c.product_id)?.selling_price || 0) * c.quantity, 0); return <Page title="Tezkor savdo" subtitle="Mahsulotni tanlang, miqdorni belgilang va chekni yakunlang"><div className="grid xl:grid-cols-[1fr_420px] gap-5"><div className="product-grid">{products.map(p => <button key={p.id} className="sell-card" disabled={p.quantity <= 0} onClick={() => setCart(prev => { const found = prev.find(x => x.product_id === p.id); return found ? prev.map(x => x.product_id === p.id ? { ...x, quantity: x.quantity + 1 } : x) : [...prev, { product_id: p.id, name: p.name, quantity: 1 }]; })}><div className="product-img">{p.image ? <img src={p.image} /> : <Box />}</div><b>{p.name}</b><span>{p.category}</span><strong>{money(p.selling_price)} so‘m</strong><em className={p.quantity <= 5 ? 'text-warn' : ''}>Qoldiq: {p.quantity}</em></button>)}</div><div className="card p-5 sticky top-5 h-fit"><SectionTitle title="Joriy chek" note="Miqdorlarni tez sozlang" />{cart.length ? cart.map((c, i) => <div className="cart-row" key={c.product_id}><div><b>{c.name}</b><p>{money(products.find(p => p.id === c.product_id)?.selling_price)} so‘m</p></div><div className="qty"><button onClick={() => setCart(cart.map((x, ix) => ix === i ? { ...x, quantity: Math.max(1, x.quantity - 1) } : x))}>−</button><input type="number" value={c.quantity} onChange={e => setCart(cart.map((x, ix) => ix === i ? { ...x, quantity: +e.target.value } : x))} /><button onClick={() => setCart(cart.map((x, ix) => ix === i ? { ...x, quantity: x.quantity + 1 } : x))}>+</button></div></div>) : <Empty text="Chek bo‘sh" />}<div className="receipt-total"><span>Jami</span><b>{money(total)} so‘m</b></div><button className="btn-primary w-full h-14" disabled={!cart.length} onClick={() => api.post('/api/sales', { items: cart.map(({ product_id, quantity }) => ({ product_id, quantity })) }).then(() => { push('success', 'Savdo muvaffaqiyatli yakunlandi'); setCart([]); load(); }).catch(e => push('error', uzError(e.response?.data?.detail)))}><ReceiptText /> Sotishni yakunlash</button></div></div></Page>; }
+
+function Analytics() { const [a, setA] = useState<any>(); useEffect(() => { api.get('/api/analytics').then(r => setA(r.data)); }, []); if (!a) return <Page title="Analitika"><LoadingGrid /></Page>; return <Page title="Analitika" subtitle="Tushum, foyda va mahsulotlar bo‘yicha professional tahlil"><div className="grid xl:grid-cols-2 gap-4"><div className="card chart-card"><SectionTitle title="Kunlik ko‘rsatkichlar" /><Line options={chartOptions} data={{ labels: a.daily.map((x: any) => x.date.slice(5)), datasets: [{ label: 'Tushum', data: a.daily.map((x: any) => x.revenue), borderColor: '#00FFB2', backgroundColor: 'rgba(0,255,178,.12)', fill: true, tension: .4 }, { label: 'Foyda', data: a.daily.map((x: any) => x.profit), borderColor: '#00D9FF', backgroundColor: 'rgba(0,217,255,.1)', fill: true, tension: .4 }] }} /></div><div className="card chart-card"><SectionTitle title="Oylik savdo" /><Bar options={chartOptions} data={{ labels: a.monthly.map((x: any) => x.month), datasets: [{ label: 'Tushum', data: a.monthly.map((x: any) => x.revenue), backgroundColor: 'rgba(0,255,178,.72)', borderRadius: 12 }] }} /></div><div className="card chart-card"><SectionTitle title="Yetakchi mahsulotlar" /><Doughnut options={{ ...chartOptions, scales: undefined }} data={{ labels: a.top_products.map((x: any) => x.name), datasets: [{ data: a.top_products.map((x: any) => x.quantity), backgroundColor: ['#00FFB2', '#00D9FF', '#22C55E', '#FACC15', '#EF4444'] }] }} /></div></div></Page>; }
+function Calendar() { const [period, setPeriod] = useState('today'), [selected, setSelected] = useState(''), [d, setD] = useState<any>(); const labels: any = { today: 'Bugun', yesterday: 'Kecha', week: 'Hafta', month: 'Oy', year: 'Yil', custom: 'Maxsus sana' }; useEffect(() => { api.get(`/api/calendar?period=${period}${selected ? '&selected=' + selected : ''}`).then(r => setD(r.data)); }, [period, selected]); return <Page title="Kalendar" subtitle="Istalgan davr uchun savdo va foyda ko‘rsatkichlari"><div className="period-tabs">{Object.keys(labels).map(x => <button key={x} className={period === x ? 'active' : ''} onClick={() => setPeriod(x)}>{labels[x]}</button>)}<input type="date" onChange={e => setSelected(e.target.value)} /></div>{d && <><div className="grid md:grid-cols-4 gap-4 mt-4"><Stat title="Tushum" value={`${money(d.revenue)} so‘m`} icon={BadgeDollarSign} /><Stat title="Foyda" value={`${money(d.profit)} so‘m`} icon={WalletCards} /><Stat title="Xarajat" value={`${money(d.expenses)} so‘m`} icon={Archive} tone="warn" /><Stat title="Sotilgan" value={d.products_sold} icon={ShoppingCart} /></div><div className="grid xl:grid-cols-2 gap-4 mt-4"><Recent sales={d.transactions} /><div className="card p-5"><SectionTitle title="Eng ko‘p sotilganlar" />{d.best_selling_products?.map((x: any) => <div className="activity-row" key={x.name}><Sparkles className="text-cyan" /><b className="flex-1">{x.name}</b><span className="badge">{x.quantity} dona</span></div>)}</div></div></>}</Page>; }
+function HistoryPage() { const [items, setItems] = useState<any[]>([]), [q, setQ] = useState(''); useEffect(() => { api.get('/api/history?search=' + encodeURIComponent(q)).then(r => setItems(r.data)); }, [q]); return <Page title="Harakatlar tarixi" subtitle="Kirish, savdo, mahsulot va xodim amallari"><div className="toolbar"><div className="search-box"><Search /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Tarixdan qidirish..." /></div></div><div className="timeline">{items.map(item => <div className="timeline-item" key={item.id}><div className="timeline-dot"><Clock3 size={18} /></div><div className="card p-4"><div className="flex justify-between gap-3"><b>{trAction(item.action)}</b><span className="text-mute text-sm">{shortDate(item.created_at)}</span></div><p className="text-mute">{item.username} · {trEntity(item.entity)}</p><p>{trDetails(item.details)}</p></div></div>)}</div></Page>; }
+
+function Employees({ push }: any) { const [items, setItems] = useState<any[]>([]), [form, setForm] = useState<any>({ role: 'employee', is_active: 1 }), [q, setQ] = useState(''); const load = () => api.get('/api/employees').then(r => setItems(r.data)); useEffect(() => { load(); }, []); const filtered = useMemo(() => items.filter(x => `${x.username} ${x.full_name} ${x.role}`.toLowerCase().includes(q.toLowerCase())), [items, q]); return <Page title="Xodimlar" subtitle="Rollar, statuslar va parollarni boshqarish"><div className="toolbar"><div className="search-box"><Search /><input value={q} onChange={e => setQ(e.target.value)} placeholder="Xodim qidirish..." /></div></div><div className="card p-5 mb-5"><SectionTitle title="Yangi xodim" note="Xodim faqat savdo qilishi mumkin" /><div className="grid md:grid-cols-5 gap-3"><input className="input" placeholder="Foydalanuvchi nomi" onChange={e => setForm({ ...form, username: e.target.value })} /><input className="input" placeholder="To‘liq ism" onChange={e => setForm({ ...form, full_name: e.target.value })} /><input className="input" placeholder="Parol" onChange={e => setForm({ ...form, password: e.target.value })} /><select className="input" onChange={e => setForm({ ...form, role: e.target.value })}><option value="employee">Xodim</option><option value="administrator">Boshqaruvchi</option></select><button className="btn-primary" onClick={() => api.post('/api/employees', form).then(() => { push('success', 'Xodim yaratildi'); load(); }).catch(e => push('error', uzError(e.response?.data?.detail)))}><UserPlus /> Yaratish</button></div></div><div className="employee-grid">{filtered.map(x => <div className="employee-card" key={x.id}><div className="avatar">{x.full_name?.[0] || x.username[0]}</div><h3>{x.full_name}</h3><p>@{x.username}</p><div className="flex gap-2 justify-center"><span className="badge cyan">{tRole(x.role)}</span><span className={`badge ${x.is_active ? 'success' : 'danger'}`}>{x.is_active ? 'Faol' : 'Bloklangan'}</span></div><div className="flex gap-2 mt-4"><button className="btn-ghost flex-1" onClick={() => { const password = prompt('Yangi parolni kiriting'); if (password) api.put('/api/employees/' + x.id, { password }).then(() => push('success', 'Parol yangilandi')); }}>Parolni tiklash</button>{x.role !== 'administrator' && <button className="btn-danger" onClick={() => confirm('Xodim o‘chirilsinmi?') && api.delete('/api/employees/' + x.id).then(() => { push('success', 'Xodim o‘chirildi'); load(); })}><Trash2 size={16} /></button>}</div></div>)}</div></Page>; }
+function SettingsPage({ push }: any) { const [s, setS] = useState<any>({}); useEffect(() => { api.get('/api/settings').then(r => setS(r.data)); }, []); const upload = (url: string, file?: File) => { if (!file) return; const fd = new FormData(); fd.append('file', file); api.post(url, fd).then(() => push('success', 'Fayl qabul qilindi')).catch(e => push('error', uzError(e.response?.data?.detail))); }; return <Page title="Sozlamalar" subtitle="Klub nomi, valyuta, zaxira va Excel amallari"><div className="settings-grid"><div className="card p-5"><SectionTitle title="Klub profili" note="Interfeysda ko‘rinadigan asosiy ma’lumotlar" /><label className="field"><span>Klub nomi</span><input value={s.gameclub_name || ''} onChange={e => setS({ ...s, gameclub_name: e.target.value })} /></label><label className="field"><span>Valyuta</span><input value={s.currency || ''} onChange={e => setS({ ...s, currency: e.target.value })} /></label><button className="btn-primary" onClick={() => api.put('/api/settings', s).then(() => push('success', 'Sozlamalar saqlandi'))}><Settings /> Saqlash</button></div><div className="card p-5"><SectionTitle title="Ma’lumotlar" note="Lokal SQLite bazasi va Excel almashinuvi" /><div className="grid gap-3"><a className="settings-action" href="http://localhost:8000/api/settings/backup"><Download /> Bazani zaxiralash</a><label className="settings-action"><RotateCcw /> Bazani tiklash<input type="file" className="hidden" onChange={e => upload('/api/settings/restore', e.target.files?.[0])} /></label><a className="settings-action" href="http://localhost:8000/api/settings/export"><FileSpreadsheet /> Excelga chiqarish</a><label className="settings-action"><Upload /> Exceldan yuklash<input type="file" className="hidden" onChange={e => upload('/api/settings/import', e.target.files?.[0])} /></label></div></div></div></Page>; }
+
+function PremiumTable({ rows, columns, actions }: any) { const [page, setPage] = useState(1); const size = 8; const total = Math.max(1, Math.ceil(rows.length / size)); const pageRows = rows.slice((page - 1) * size, page * size); return <div className="table-card"><table><thead><tr>{columns.map((c: any) => <th key={c[0]}>{c[1]}</th>)}{actions && <th>Amallar</th>}</tr></thead><tbody>{pageRows.map((r: any) => <tr key={r.id}>{columns.map(([key]: any) => <td key={key}>{cell(key, r)}</td>)}{actions && <td><div className="flex gap-2 flex-wrap">{actions(r)}</div></td>}</tr>)}</tbody></table><div className="pager"><span>{rows.length} ta yozuv</span><div><button onClick={() => setPage(Math.max(1, page - 1))}><ChevronLeft /></button><b>{page}/{total}</b><button onClick={() => setPage(Math.min(total, page + 1))}><ChevronRight /></button></div></div></div>; }
+function cell(key: string, row: any) { if (key === 'image') return row[key] ? <img src={row[key]} className="preview" /> : <div className="preview empty"><Box size={18} /></div>; if (key === 'category') return <span className="badge cyan">{row[key]}</span>; if (key === 'quantity') return <span className={`badge ${row[key] <= 5 ? 'danger' : 'success'}`}>{row[key]} dona</span>; if (key.includes('price')) return `${money(row[key])} so‘m`; return String(row[key] ?? '—'); }
+
+export default function App() { const { user, setUser } = useAuth(); return <Routes><Route path="/login" element={<Login setUser={setUser} />} /><Route path="/*" element={<Guard user={user}><Shell user={user as User} setUser={setUser} /></Guard>} /></Routes>; }
